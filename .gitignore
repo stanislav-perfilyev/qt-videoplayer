@@ -1,0 +1,7 @@
+build/
+*.exe
+*.obj
+*.dll
+*.dll.a
+CMakeFiles/
+CMakeCache.txt
