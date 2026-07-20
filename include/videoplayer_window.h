@@ -3,6 +3,7 @@
 #include <QMainWindow>
 #include <QMediaPlayer>
 #include <QAudioOutput>
+#include <QLoggingCategory>
 #include <memory>
 
 Q_DECLARE_LOGGING_CATEGORY(lcPlayer)
@@ -61,7 +62,8 @@ private:
     void setupConnections();
     void updateButtonStates(QMediaPlayer::PlaybackState state);
 
-    static constexpr qint64 kSeekStepMs = 10'000;  ///< 10 seconds in ms
+    static constexpr qint64 kSeekStepMs   = 10'000;  ///< 10 seconds in ms
+    static constexpr qint64 kMsPerSecond  = 1'000;
 
     std::unique_ptr<Ui::MainWindow> ui_;
     QMediaPlayer*                   player_;      ///< owned by Qt parent chain

@@ -2,6 +2,11 @@
 #include <QApplication>
 #include <QLoggingCategory>
 
+namespace {
+constexpr int kDefaultWindowWidth  = 900;
+constexpr int kDefaultWindowHeight = 650;
+}  // namespace
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -13,7 +18,7 @@ int main(int argc, char *argv[])
     QLoggingCategory::setFilterRules("app.player.info=true");
 
     VideoPlayerWindow window;
-    window.resize(900, 650);
+    window.resize(kDefaultWindowWidth, kDefaultWindowHeight);
     window.show();
 
     return app.exec();

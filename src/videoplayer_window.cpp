@@ -14,8 +14,8 @@ Q_LOGGING_CATEGORY(lcPlayer, "app.player")
 VideoPlayerWindow::VideoPlayerWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui_(std::make_unique<Ui::MainWindow>())
-    , player_(new QMediaPlayer(this))
-    , audioOutput_(new QAudioOutput(this))
+    , player_(new QMediaPlayer(this))          // NOLINT(cppcoreguidelines-owning-memory) — Qt-parented
+    , audioOutput_(new QAudioOutput(this))     // NOLINT(cppcoreguidelines-owning-memory) — Qt-parented
 {
     ui_->setupUi(this);
     setWindowTitle(tr("Qt6 Video Player"));
@@ -54,17 +54,19 @@ void VideoPlayerWindow::setupPlayer()
     audioOutput_->setVolume(0.8f);
 
     // Replace the QGraphicsView placeholder in the .ui with a QVideoWidget
-    auto* videoWidget = new QVideoWidget(this);
+    auto* videoWidget = new QVideoWidget(this);  // NOLINT(cppcoreguidelines-owning-memory) — Qt-parented
     player_->setVideoOutput(videoWidget);
 
     // Swap placeholder with the actual video widget
     auto* layout = qobject_cast<QVBoxLayout*>(
         ui_->verticalLayoutWidget->layout());
     if (layout) {
-        // Replace index 0 (the QGraphicsView) with the video widget
+        // Replace index 0 (the QGraphicsView) with the video widget.
+        // takeAt() transfers ownership of the QLayoutItem (and its widget)
+        // to the caller — both must be deleted explicitly per Qt's contract.
         QLayoutItem* old = layout->takeAt(0);
-        delete old->widget();
-        delete old;
+        delete old->widget();  // NOLINT(cppcoreguidelines-owning-memory)
+        delete old;            // NOLINT(cppcoreguidelines-owning-memory)
         layout->insertWidget(0, videoWidget);
     }
 }
@@ -165,12 +167,12 @@ void VideoPlayerWindow::onPlayerError(QMediaPlayer::Error /*error*/,
 
 void VideoPlayerWindow::onDurationChanged(qint64 duration)
 {
-    ui_->progressBar->setMaximum(static_cast<int>(duration / 1000));
+    ui_->progressBar->setMaximum(static_cast<int>(duration / kMsPerSecond));
 }
 
 void VideoPlayerWindow::onPositionChanged(qint64 position)
 {
-    ui_->progressBar->setValue(static_cast<int>(position / 1000));
+    ui_->progressBar->setValue(static_cast<int>(position / kMsPerSecond));
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
