@@ -38,16 +38,32 @@ jobs:
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=${{ matrix.cc }} \
-            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_AUTOMOC_VERBOSE=ON
+
+      # TEMPORARY DIAGNOSTIC — mocs_compilation.cpp for player_lib comes out
+      # empty ("No files found that require moc"), and nm confirms vtable/
+      # staticMetaObject are undefined everywhere in the archive — moc is
+      # never being run for VideoPlayerWindow at all. That's a moc-detection
+      # problem, not the link-ordering problem three earlier fixes assumed.
+      - name: Debug AutogenInfo before build
+        run: |
+          echo "--- player_lib_autogen/AutogenInfo.json (HEADERS/SOURCES seen by AUTOMOC) ---"
+          find build -path "*player_lib_autogen*AutogenInfo.json" -exec cat {} \;
+          echo "--- videoplayer_window.cpp as checked out (first 3 lines, hexdump to catch encoding issues) ---"
+          head -c 200 src/videoplayer_window.cpp | xxd
+          echo "--- grep Q_OBJECT in the header as checked out ---"
+          grep -n "Q_OBJECT" include/videoplayer_window.h | cat -A
 
       - name: Build
-        run: cmake --build build --parallel
+        run: |
+          set -o pipefail
+          VERBOSE=1 cmake --build build --parallel 2>&1 | tee build.log
 
-      # TEMPORARY DIAGNOSTIC — remove once the vtable/staticMetaObject link
-      # failure is root-caused. Three different linking strategies (OBJECT
-      # library, hand-rolled --whole-archive, $<LINK_LIBRARY:WHOLE_ARCHIVE>)
-      # have all failed with byte-identical undefined-reference output,
-      # which points at moc generation rather than archive/link ordering.
+      - name: Show AUTOMOC-relevant build log lines
+        if: always()
+        run: grep -iE "automoc|moc:|videoplayer_window" build.log || echo "(no automoc-related lines found)"
+
       - name: Debug moc output
         if: always()
         run: |
