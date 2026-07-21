@@ -51,12 +51,7 @@ jobs:
           echo "--- HEADERS/SOURCES fields from player_lib_autogen.dir/AutogenInfo.json ---"
           AUTOGEN_JSON=$(find build -path "*player_lib_autogen.dir/AutogenInfo.json" | head -1)
           echo "Using: $AUTOGEN_JSON"
-          python3 -c "
-import json, sys
-d = json.load(open(sys.argv[1]))
-for k in ('HEADERS', 'SOURCES', 'HEADER_EXTENSIONS', 'MOC_SKIP', 'MOC_RELAXED_MODE', 'INCLUDE_DIR'):
-    print(k, '=', d.get(k))
-" "$AUTOGEN_JSON"
+          python3 -c "import json,sys; d=json.load(open(sys.argv[1])); [print(k,'=',d.get(k)) for k in ('HEADERS','SOURCES','HEADER_EXTENSIONS','MOC_SKIP','MOC_RELAXED_MODE','INCLUDE_DIR')]" "$AUTOGEN_JSON"
           echo "--- ParseCache.txt for player_lib_autogen (per-file moc detection) ---"
           find build -path "*player_lib_autogen.dir*ParseCache.txt" -exec cat {} \;
           echo "--- videoplayer_window.cpp as checked out (hexdump first 200 bytes, catch encoding issues) ---"
