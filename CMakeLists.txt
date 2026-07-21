@@ -35,15 +35,7 @@ set(WARNING_FLAGS
 )
 
 # ── Library (VideoPlayerWindow — testable without a running app) ─────────
-# OBJECT (not STATIC): a Q_OBJECT class's vtable/staticMetaObject live in the
-# AUTOMOC-generated mocs_compilation.cpp translation unit. When player_lib is
-# a conventional static archive, the final executable link can fail with
-# "undefined reference to vtable for VideoPlayerWindow" / "staticMetaObject"
-# because the linker's single-pass archive-member extraction doesn't always
-# pull that object file back in once player_lib's own object introduces the
-# need for it. An OBJECT library sidesteps archive-member-order entirely —
-# every consumer gets all of its compiled objects directly.
-add_library(player_lib OBJECT
+add_library(player_lib
     src/videoplayer_window.cpp
     player.ui
 )
@@ -53,9 +45,34 @@ target_link_libraries(player_lib PUBLIC
     Qt6::Multimedia Qt6::MultimediaWidgets)
 target_compile_options(player_lib PRIVATE ${WARNING_FLAGS})
 
+# A Q_OBJECT class's vtable/staticMetaObject live in the AUTOMOC-generated
+# mocs_compilation.cpp translation unit. Nothing in player_lib's *other*
+# object files references that unit's symbols by name, so a conventional
+# single-pass linker can skip pulling it out of the static archive entirely,
+# producing "undefined reference to vtable for VideoPlayerWindow" /
+# "staticMetaObject" at the final executable link — the archive member is
+# simply never extracted. (An earlier attempt to fix this by making
+# player_lib an OBJECT library did not help: CMake's automatic
+# $<TARGET_OBJECTS:player_lib> propagation through target_link_libraries did
+# not carry the autogen object into the consumer's link line either.)
+# --whole-archive forces every object in player_lib to be linked in
+# regardless of whether the linker thinks it's referenced.
+function(link_player_lib_whole_archive target)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_link_libraries(${target} PRIVATE
+            -Wl,--whole-archive player_lib -Wl,--no-whole-archive)
+    elseif(MSVC)
+        target_link_libraries(${target} PRIVATE player_lib)
+        target_link_options(${target} PRIVATE
+            "/WHOLEARCHIVE:$<TARGET_FILE_NAME:player_lib>")
+    else()
+        target_link_libraries(${target} PRIVATE player_lib)
+    endif()
+endfunction()
+
 # ── Executable ────────────────────────────────────────────────────────────
 add_executable(qt_videoplayer src/main.cpp)
-target_link_libraries(qt_videoplayer PRIVATE player_lib)
+link_player_lib_whole_archive(qt_videoplayer)
 target_compile_options(qt_videoplayer PRIVATE ${WARNING_FLAGS})
 if(WIN32)
     set_target_properties(qt_videoplayer PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -85,7 +102,8 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 
 add_executable(test_videoplayer_window tests/test_videoplayer_window.cpp)
-target_link_libraries(test_videoplayer_window PRIVATE player_lib GTest::gtest)
+link_player_lib_whole_archive(test_videoplayer_window)
+target_link_libraries(test_videoplayer_window PRIVATE GTest::gtest)
 target_compile_options(test_videoplayer_window PRIVATE ${WARNING_FLAGS})
 include(GoogleTest)
 gtest_discover_tests(test_videoplayer_window
