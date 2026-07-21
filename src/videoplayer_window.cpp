@@ -110,8 +110,10 @@ void VideoPlayerWindow::onOpenFileTriggered()
         tr("Open Video"), {},
         tr("Video Files (*.mp4 *.avi *.mkv *.mov *.wmv *.flv);;"
            "All Files (*)"));
-    if (!path.isEmpty())
-        loadFile(path);
+    if (!path.isEmpty() && !loadFile(path)) {
+        QMessageBox::warning(this, tr("Open Video"),
+                              tr("Could not load the selected file."));
+    }
 }
 
 void VideoPlayerWindow::onPlayClicked()
