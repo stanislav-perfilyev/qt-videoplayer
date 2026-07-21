@@ -43,6 +43,23 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
+      # TEMPORARY DIAGNOSTIC — remove once the vtable/staticMetaObject link
+      # failure is root-caused. Three different linking strategies (OBJECT
+      # library, hand-rolled --whole-archive, $<LINK_LIBRARY:WHOLE_ARCHIVE>)
+      # have all failed with byte-identical undefined-reference output,
+      # which points at moc generation rather than archive/link ordering.
+      - name: Debug moc output
+        if: always()
+        run: |
+          echo "--- mocs_compilation.cpp for player_lib ---"
+          find build -path "*player_lib_autogen*mocs_compilation.cpp" -exec cat {} \;
+          echo "--- find any moc_videoplayer_window.cpp ---"
+          find build -iname "moc_videoplayer_window*"
+          echo "--- nm libplayer_lib.a | grep VideoPlayerWindow ---"
+          nm build/libplayer_lib.a 2>&1 | grep -i VideoPlayerWindow || echo "(no matches)"
+          echo "--- nm on the mocs_compilation.cpp.o member specifically ---"
+          find build -path "*player_lib.dir*mocs_compilation.cpp.o" -exec nm {} \; 2>&1 | head -50
+
       - name: Test
         run: |
           QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
