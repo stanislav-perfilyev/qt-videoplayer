@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.24)
 project(qt_videoplayer VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -51,28 +51,27 @@ target_compile_options(player_lib PRIVATE ${WARNING_FLAGS})
 # single-pass linker can skip pulling it out of the static archive entirely,
 # producing "undefined reference to vtable for VideoPlayerWindow" /
 # "staticMetaObject" at the final executable link — the archive member is
-# simply never extracted. (An earlier attempt to fix this by making
-# player_lib an OBJECT library did not help: CMake's automatic
-# $<TARGET_OBJECTS:player_lib> propagation through target_link_libraries did
-# not carry the autogen object into the consumer's link line either.)
-# --whole-archive forces every object in player_lib to be linked in
-# regardless of whether the linker thinks it's referenced.
-function(link_player_lib_whole_archive target)
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        target_link_libraries(${target} PRIVATE
-            -Wl,--whole-archive player_lib -Wl,--no-whole-archive)
-    elseif(MSVC)
-        target_link_libraries(${target} PRIVATE player_lib)
-        target_link_options(${target} PRIVATE
-            "/WHOLEARCHIVE:$<TARGET_FILE_NAME:player_lib>")
-    else()
-        target_link_libraries(${target} PRIVATE player_lib)
-    endif()
-endfunction()
+# simply never extracted.
+#
+# Two earlier attempts at a fix did NOT work:
+#  1. Making player_lib an OBJECT library — CMake's automatic
+#     $<TARGET_OBJECTS:player_lib> propagation through target_link_libraries
+#     did not carry the autogen object into the consumer's link line.
+#  2. Hand-rolled `-Wl,--whole-archive player_lib -Wl,--no-whole-archive` as
+#     separate target_link_libraries() list items — CMake's link-line
+#     de-duplication/reordering pass (needed to resolve static-library
+#     dependency cycles) is free to separate a raw `-Wl,` flag from the
+#     target name that follows it, silently breaking the pairing. The
+#     resulting link command had no --whole-archive at all.
+#
+# $<LINK_LIBRARY:WHOLE_ARCHIVE,...> (CMake >= 3.24) is the correct fix: it's
+# a first-class, atomic link-item that CMake's reordering logic cannot split
+# apart, and it emits the right compiler-specific flag automatically
+# (-Wl,--whole-archive / -Wl,-force_load / /WHOLEARCHIVE:...).
 
 # ── Executable ────────────────────────────────────────────────────────────
 add_executable(qt_videoplayer src/main.cpp)
-link_player_lib_whole_archive(qt_videoplayer)
+target_link_libraries(qt_videoplayer PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,player_lib>)
 target_compile_options(qt_videoplayer PRIVATE ${WARNING_FLAGS})
 if(WIN32)
     set_target_properties(qt_videoplayer PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -102,8 +101,8 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 
 add_executable(test_videoplayer_window tests/test_videoplayer_window.cpp)
-link_player_lib_whole_archive(test_videoplayer_window)
-target_link_libraries(test_videoplayer_window PRIVATE GTest::gtest)
+target_link_libraries(test_videoplayer_window PRIVATE
+    $<LINK_LIBRARY:WHOLE_ARCHIVE,player_lib> GTest::gtest)
 target_compile_options(test_videoplayer_window PRIVATE ${WARNING_FLAGS})
 include(GoogleTest)
 gtest_discover_tests(test_videoplayer_window
