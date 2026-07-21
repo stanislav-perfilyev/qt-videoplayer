@@ -31,7 +31,25 @@ jobs:
             cmake \
             qt6-base-dev \
             qt6-multimedia-dev \
-            libgtest-dev
+            libgtest-dev \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad \
+            gstreamer1.0-plugins-ugly \
+            gstreamer1.0-libav \
+            gstreamer1.0-alsa
+
+      # qt6-multimedia-dev's GStreamer plugin dependencies are only
+      # "Recommends" (skipped above via --no-install-recommends, done
+      # deliberately to avoid pulling in unrelated GUI/doc packages), so the
+      # actual runtime plugins (playbin, decodebin, audio/video sinks) had to
+      # be listed explicitly — without them, QMediaPlayer's GStreamer backend
+      # fails to create pipeline elements (GStreamer-CRITICAL:
+      # gst_element_link_many: assertion 'GST_IS_ELEMENT (element_2)' failed)
+      # and segfaults the moment setupPlayer() wires up video/audio output,
+      # even before any file is loaded.
+      - name: Load dummy ALSA sound card (headless CI has no audio hardware)
+        run: sudo modprobe snd-dummy || true
 
       - name: Configure
         run: |
