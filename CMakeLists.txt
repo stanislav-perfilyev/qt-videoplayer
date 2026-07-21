@@ -35,7 +35,15 @@ set(WARNING_FLAGS
 )
 
 # ── Library (VideoPlayerWindow — testable without a running app) ─────────
-add_library(player_lib
+# OBJECT (not STATIC): a Q_OBJECT class's vtable/staticMetaObject live in the
+# AUTOMOC-generated mocs_compilation.cpp translation unit. When player_lib is
+# a conventional static archive, the final executable link can fail with
+# "undefined reference to vtable for VideoPlayerWindow" / "staticMetaObject"
+# because the linker's single-pass archive-member extraction doesn't always
+# pull that object file back in once player_lib's own object introduces the
+# need for it. An OBJECT library sidesteps archive-member-order entirely —
+# every consumer gets all of its compiled objects directly.
+add_library(player_lib OBJECT
     src/videoplayer_window.cpp
     player.ui
 )
