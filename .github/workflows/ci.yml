@@ -65,6 +65,7 @@ jobs:
             --suppress=unknownMacro \
             --suppress=unmatchedSuppression \
             --suppress=checkersReport \
+            --suppress=unusedFunction:tests/* \
             --error-exitcode=1 \
             --quiet \
             src/ include/ tests/

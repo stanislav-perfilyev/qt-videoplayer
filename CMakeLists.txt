@@ -6,6 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
+# player.ui lives at the project root, not next to the .cpp files that
+# include the generated ui_player.h (src/). AutoUic only searches the
+# including file's own directory by default, so without this it fails on
+# clean checkouts with "could not be found in the following directories".
+set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Qt installation path (Windows/MinGW only) — override via
 # -DQT_PATH=<your Qt dir> or the QT_PATH environment variable.
