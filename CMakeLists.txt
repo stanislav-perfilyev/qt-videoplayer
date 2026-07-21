@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.16)
 project(qt_videoplayer VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -35,8 +35,24 @@ set(WARNING_FLAGS
 )
 
 # ── Library (VideoPlayerWindow — testable without a running app) ─────────
+# include/videoplayer_window.h is listed explicitly here (not just #included
+# from the .cpp) because AUTOMOC's companion-header discovery only looks for
+# a header next to its .cpp (or a couple of hardcoded relative conventions);
+# it does NOT consult target_include_directories(). Since the header lives
+# in include/ while the .cpp lives in src/ (siblings, not nested), AUTOMOC
+# never found it on its own — confirmed via AutogenInfo.json showing
+# HEADERS = [] for this target even though the .cpp does #include it and
+# Q_OBJECT is genuinely present. The result was a silently-empty
+# mocs_compilation.cpp: no moc ever ran for VideoPlayerWindow, so its
+# vtable/staticMetaObject were undefined everywhere in the build — a moc
+# generation problem, not a linker/archive-ordering one. (Three earlier
+# attempts — OBJECT library, hand-rolled --whole-archive,
+# $<LINK_LIBRARY:WHOLE_ARCHIVE,...> — all "fixed" archive extraction, which
+# was never actually broken, so all three failed identically.) Explicitly
+# listing the header as a source makes AUTOMOC scan it unconditionally.
 add_library(player_lib
     src/videoplayer_window.cpp
+    include/videoplayer_window.h
     player.ui
 )
 target_include_directories(player_lib PUBLIC include)
@@ -45,33 +61,9 @@ target_link_libraries(player_lib PUBLIC
     Qt6::Multimedia Qt6::MultimediaWidgets)
 target_compile_options(player_lib PRIVATE ${WARNING_FLAGS})
 
-# A Q_OBJECT class's vtable/staticMetaObject live in the AUTOMOC-generated
-# mocs_compilation.cpp translation unit. Nothing in player_lib's *other*
-# object files references that unit's symbols by name, so a conventional
-# single-pass linker can skip pulling it out of the static archive entirely,
-# producing "undefined reference to vtable for VideoPlayerWindow" /
-# "staticMetaObject" at the final executable link — the archive member is
-# simply never extracted.
-#
-# Two earlier attempts at a fix did NOT work:
-#  1. Making player_lib an OBJECT library — CMake's automatic
-#     $<TARGET_OBJECTS:player_lib> propagation through target_link_libraries
-#     did not carry the autogen object into the consumer's link line.
-#  2. Hand-rolled `-Wl,--whole-archive player_lib -Wl,--no-whole-archive` as
-#     separate target_link_libraries() list items — CMake's link-line
-#     de-duplication/reordering pass (needed to resolve static-library
-#     dependency cycles) is free to separate a raw `-Wl,` flag from the
-#     target name that follows it, silently breaking the pairing. The
-#     resulting link command had no --whole-archive at all.
-#
-# $<LINK_LIBRARY:WHOLE_ARCHIVE,...> (CMake >= 3.24) is the correct fix: it's
-# a first-class, atomic link-item that CMake's reordering logic cannot split
-# apart, and it emits the right compiler-specific flag automatically
-# (-Wl,--whole-archive / -Wl,-force_load / /WHOLEARCHIVE:...).
-
 # ── Executable ────────────────────────────────────────────────────────────
 add_executable(qt_videoplayer src/main.cpp)
-target_link_libraries(qt_videoplayer PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,player_lib>)
+target_link_libraries(qt_videoplayer PRIVATE player_lib)
 target_compile_options(qt_videoplayer PRIVATE ${WARNING_FLAGS})
 if(WIN32)
     set_target_properties(qt_videoplayer PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -101,8 +93,7 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 
 add_executable(test_videoplayer_window tests/test_videoplayer_window.cpp)
-target_link_libraries(test_videoplayer_window PRIVATE
-    $<LINK_LIBRARY:WHOLE_ARCHIVE,player_lib> GTest::gtest)
+target_link_libraries(test_videoplayer_window PRIVATE player_lib GTest::gtest)
 target_compile_options(test_videoplayer_window PRIVATE ${WARNING_FLAGS})
 include(GoogleTest)
 gtest_discover_tests(test_videoplayer_window
